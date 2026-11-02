@@ -1,0 +1,16 @@
+node_modules/
+frontend/dist/
+backend/target/
+backend/data/
+data/
+.env
+*.log
+.sites-runtime/
+.test-artifacts/
+
+backend/src/main/resources/static/
+
+Leaf Bookstore/*.jar
+Leaf Bookstore/data/
+
+**/payment.properties

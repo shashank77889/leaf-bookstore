@@ -1,0 +1,6 @@
+# Copy this file to payment.properties beside the launcher (or in backend for development).
+# Generate TEST keys in your Razorpay dashboard. Never put secrets in frontend code.
+store.razorpay.key-id=rzp_test_REPLACE_ME
+store.razorpay.key-secret=REPLACE_ME
+# Optional for local checkout; required when configuring signed webhooks.
+store.razorpay.webhook-secret=

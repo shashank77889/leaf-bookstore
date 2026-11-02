@@ -1,0 +1,40 @@
+LEAF BOOKSTORE
+==============
+
+START THE WEBSITE
+1. Double-click "Leaf Bookstore.cmd".
+2. Wait until the window says "Started StoreApplication".
+3. Open http://127.0.0.1:8080 in your browser.
+4. Keep the command window open. Press Ctrl+C to stop.
+
+Java 21 or newer is required. It is already installed on this computer.
+React and the backend are bundled in "Leaf Bookstore.jar".
+No npm or Maven commands are needed to use this packaged version.
+Run only one copy at a time; the store uses port 8080.
+
+DEMO ADMIN LOGIN
+Email: admin@leaf.local
+Password: LeafAdmin!2026
+
+CUSTOMER LOGIN
+Use "Sign in", then "Create account", to create your own customer account.
+
+WHAT WORKS
+Book search and filters, shopping bag, registration and login,
+demo checkout, saved orders, product/stock management, and order status.
+
+PAYMENTS
+Razorpay test checkout is integrated. Add your test keys to payment.properties
+and restart. See PAYMENT_SETUP.md. No live payments are enabled. An explicit
+simulation option is also available without keys.
+
+DATA
+Accounts, inventory, and orders persist in the "data" folder next to
+this launcher. Do not delete that folder if you want to keep your data.
+This packaged copy has its own database, separate from backend/data
+used by the source-code development launcher.
+
+SOURCE CODE
+The parent "2nd project" folder contains frontend, backend, README.md,
+build.ps1, start.ps1, and the integration verification script.
+
