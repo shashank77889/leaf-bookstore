@@ -2,7 +2,8 @@ import { spawn, spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
 const port=18081;
-const child=spawn('java',['-jar','target/leaf-store-1.0.0.jar'],{cwd:new URL('../backend/',import.meta.url),env:{...process.env,PORT:String(port),DATABASE_URL:'jdbc:h2:mem:leaf_test;DB_CLOSE_DELAY=-1'},stdio:['ignore','pipe','pipe']});
+// Blank the Razorpay settings so a local backend/payment.properties never reaches this isolated test server.
+const child=spawn('java',['-jar','target/leaf-store-1.0.0.jar','--store.razorpay.key-id=','--store.razorpay.key-secret=','--store.razorpay.webhook-secret='],{cwd:new URL('../backend/',import.meta.url),env:{...process.env,PORT:String(port),DATABASE_URL:'jdbc:h2:mem:leaf_test;DB_CLOSE_DELAY=-1'},stdio:['ignore','pipe','pipe']});
 let logs='';child.stdout.on('data',d=>logs+=d);child.stderr.on('data',d=>logs+=d);
 class Client {
   cookie='';csrf=null;
