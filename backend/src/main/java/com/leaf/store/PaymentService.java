@@ -130,6 +130,41 @@ public class PaymentService {
         }
         return db.queryForMap("SELECT * FROM shop_orders WHERE id=?",id);
     }
+    /**
+     * Lets the store admin settle an order whose payment was captured after its stock reservation ended.
+     * "accept" takes the stock again and confirms the order; "refund" returns the money through Razorpay.
+     */
+    @Transactional
+    public Map<String,Object> review(String id,String action){
+        var order=locked(id,null);
+        if(!order.get("STATUS").equals("PAYMENT_REVIEW"))throw StoreController.bad("This order is not waiting for payment review.");
+        if(action.equals("accept"))acceptReviewed(id);else refundReviewed(order);
+        return db.queryForMap("SELECT * FROM shop_orders WHERE id=?",id);
+    }
+    void acceptReviewed(String id){
+        var lines=db.queryForList("SELECT product_id,title,quantity FROM order_items WHERE order_id=? ORDER BY product_id",id);
+        for(var line:lines){
+            int stock=db.queryForObject("SELECT stock FROM products WHERE id=? FOR UPDATE",Integer.class,line.get("PRODUCT_ID"));
+            if(stock<((Number)line.get("QUANTITY")).intValue())throw StoreController.bad(line.get("TITLE")+" no longer has enough copies in stock. Restock it or refund the payment.");
+        }
+        for(var line:lines)db.update("UPDATE products SET stock=stock-? WHERE id=?",line.get("QUANTITY"),line.get("PRODUCT_ID"));
+        db.update("UPDATE shop_orders SET status='CONFIRMED',payment='RAZORPAY_TEST_PAID' WHERE id=?",id);
+    }
+    void refundReviewed(Map<String,Object> order){
+        gateway.requireConfigured();
+        String paymentId=(String)order.get("PROVIDER_PAYMENT_ID");
+        int amount=((Number)order.get("TOTAL")).intValue();
+        var payment=gateway.payment(paymentId);
+        if(!payment.path("id").asText().equals(paymentId)||!payment.path("order_id").asText().equals(order.get("PROVIDER_ORDER_ID")))throw StoreController.bad("Payment does not match this order.");
+        // An earlier attempt may have refunded at Razorpay without us recording it; never refund twice.
+        boolean alreadyRefunded=payment.path("status").asText().equals("refunded")||payment.path("amount_refunded").asInt()>=amount;
+        if(!alreadyRefunded){
+            var refund=gateway.refund(paymentId,amount);
+            if(!refund.path("payment_id").asText().equals(paymentId)||refund.path("amount").asInt()!=amount)
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"Unexpected Razorpay refund response. Check the payment in the Razorpay dashboard before retrying.");
+        }
+        db.update("UPDATE shop_orders SET status='REFUNDED',payment='RAZORPAY_TEST_REFUNDED' WHERE id=?",order.get("ID"));
+    }
     void apply(Map<String,Object> order,JsonNode payment){
         int amount=((Number)order.get("TOTAL")).intValue();
         if(!payment.path("order_id").asText().equals(order.get("PROVIDER_ORDER_ID"))||payment.path("amount").asInt()!=amount||!payment.path("currency").asText().equals("INR"))

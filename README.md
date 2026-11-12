@@ -98,6 +98,7 @@ This starts an isolated in-memory database on port 18081 and checks authenticati
 | `PATCH /api/admin/products/{id}/visibility` | Admin | Show/hide product |
 | `GET /api/admin/orders` | Admin | All orders |
 | `PATCH /api/admin/orders/{id}` | Admin | Advance fulfilment status |
+| `POST /api/admin/orders/{id}/review` | Admin | Settle a late payment: `accept` (take stock, confirm) or `refund` (full Razorpay refund) |
 
 Prices are integer paise. ₹449 is stored as 44900. Delivery is ₹59 below ₹999 and free at or above that amount. Database result fields use uppercase names; authentication DTOs use lowercase names.
 

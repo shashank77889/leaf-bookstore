@@ -87,6 +87,60 @@ class PaymentServiceTest {
     @Test void expirationReleasesStockOnlyOnce(){var c=create();String id=(String)c.get("id");expire(id);when(gateway.payments(anyString())).thenReturn(node("{\"items\":[]}"));assertEquals("EXPIRED",payments.reconcile(id,user).get("STATUS"));payments.reconcile(id,user);assertEquals(18,stock());}
     @Test void outageDoesNotReleasePotentiallyPaidStock(){var c=create();String id=(String)c.get("id");expire(id);when(gateway.payments(anyString())).thenThrow(new IllegalStateException("fixture outage"));assertThrows(IllegalStateException.class,()->payments.reconcile(id,user));assertEquals(17,stock());assertEquals("PENDING_PAYMENT",stored(id).get("STATUS"));}
     @Test void lateCaptureRequiresReviewWithoutTakingStockAgain(){var c=create();String id=(String)c.get("id");expire(id);when(gateway.payments(anyString())).thenReturn(node("{\"items\":[]}"));payments.reconcile(id,user);payList(payment("captured",50800,"INR","order_fixture"));assertEquals("PAYMENT_REVIEW",payments.reconcile(id,user).get("STATUS"));assertEquals(18,stock());}
+    String inReview(){
+        String id=(String)create().get("id");expire(id);
+        when(gateway.payments(anyString())).thenReturn(node("{\"items\":[]}"));payments.reconcile(id,user);
+        payList(payment("captured",50800,"INR","order_fixture"));payments.reconcile(id,user);
+        assertEquals("PAYMENT_REVIEW",stored(id).get("STATUS"));assertEquals(18,stock());
+        return id;
+    }
+    JsonNode refundResponse(int amount){return node("{\"id\":\"rfnd_fixture\",\"payment_id\":\"pay_fixture\",\"amount\":"+amount+"}");}
+    @Test void acceptingReviewConfirmsOrderAndTakesStock(){
+        String id=inReview();
+        var order=payments.review(id,"accept");
+        assertEquals("CONFIRMED",order.get("STATUS"));assertEquals("RAZORPAY_TEST_PAID",order.get("PAYMENT"));assertEquals(17,stock());
+        verify(gateway,never()).refund(anyString(),anyInt());
+    }
+    @Test void acceptingReviewFailsWhenBookSoldOut(){
+        String id=inReview();db.update("UPDATE products SET stock=0 WHERE id=1");
+        assertThrows(ResponseStatusException.class,()->payments.review(id,"accept"));
+        assertEquals("PAYMENT_REVIEW",stored(id).get("STATUS"));assertEquals(0,stock());
+    }
+    @Test void refundingReviewReturnsMoneyAndKeepsStock(){
+        String id=inReview();
+        when(gateway.payment("pay_fixture")).thenReturn(payment("captured",50800,"INR","order_fixture"));
+        when(gateway.refund("pay_fixture",50800)).thenReturn(refundResponse(50800));
+        var order=payments.review(id,"refund");
+        assertEquals("REFUNDED",order.get("STATUS"));assertEquals("RAZORPAY_TEST_REFUNDED",order.get("PAYMENT"));assertEquals(18,stock());
+        assertThrows(ResponseStatusException.class,()->payments.review(id,"refund"));
+        verify(gateway,times(1)).refund("pay_fixture",50800);
+    }
+    @Test void paymentAlreadyRefundedAtProviderIsNotRefundedAgain(){
+        String id=inReview();
+        when(gateway.payment("pay_fixture")).thenReturn(payment("refunded",50800,"INR","order_fixture"));
+        assertEquals("REFUNDED",payments.review(id,"refund").get("STATUS"));
+        verify(gateway,never()).refund(anyString(),anyInt());
+    }
+    @Test void failedRefundLeavesOrderInReview(){
+        String id=inReview();
+        when(gateway.payment("pay_fixture")).thenReturn(payment("captured",50800,"INR","order_fixture"));
+        when(gateway.refund("pay_fixture",50800)).thenThrow(new IllegalStateException("fixture outage"));
+        assertThrows(IllegalStateException.class,()->payments.review(id,"refund"));
+        assertEquals("PAYMENT_REVIEW",stored(id).get("STATUS"));
+    }
+    @Test void refundResponseMustMatchPayment(){
+        String id=inReview();
+        when(gateway.payment("pay_fixture")).thenReturn(payment("captured",50800,"INR","order_fixture"));
+        when(gateway.refund("pay_fixture",50800)).thenReturn(refundResponse(100));
+        assertThrows(ResponseStatusException.class,()->payments.review(id,"refund"));
+        assertEquals("PAYMENT_REVIEW",stored(id).get("STATUS"));
+    }
+    @Test void reviewOnlyAppliesToOrdersInReview(){
+        String id=(String)create().get("id");
+        assertThrows(ResponseStatusException.class,()->payments.review(id,"accept"));
+        assertThrows(ResponseStatusException.class,()->payments.review(id,"refund"));
+        assertEquals("PENDING_PAYMENT",stored(id).get("STATUS"));assertEquals(17,stock());
+    }
     @Test void otherCustomerCannotAccessPayment(){var c=create();var other=new UsernamePasswordAuthenticationToken("otherpay@example.test",null,List.of());assertThrows(ResponseStatusException.class,()->payments.resume((String)c.get("id"),other));assertThrows(ResponseStatusException.class,()->payments.reconcile((String)c.get("id"),other));}
     @Test void hmacRequiresExactBodyAndSecret(){String signature="f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8";assertTrue(RazorpayClient.signature("key","The quick brown fox jumps over the lazy dog",signature));assertFalse(RazorpayClient.signature("wrong","The quick brown fox jumps over the lazy dog",signature));assertFalse(RazorpayClient.signature("key","changed",signature));assertFalse(RazorpayClient.signature("key","body","bad"));}
     @Test void liveKeysAreRejected(){assertThrows(IllegalArgumentException.class,()->new RazorpayClient("rzp_live_example","secret","webhook","https://api.razorpay.com/v1"));}

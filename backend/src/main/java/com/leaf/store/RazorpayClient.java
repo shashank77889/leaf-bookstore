@@ -45,6 +45,7 @@ public class RazorpayClient {
     JsonNode payment(String id){return request("GET","/payments/"+safeId(id),null);}
     JsonNode payments(String id){return request("GET","/orders/"+safeId(id)+"/payments",null);}
     JsonNode capture(String id,int amount){return request("POST","/payments/"+safeId(id)+"/capture",Map.of("amount",amount,"currency","INR"));}
+    JsonNode refund(String id,int amount){return request("POST","/payments/"+safeId(id)+"/refund",Map.of("amount",amount));}
     JsonNode parse(String raw){return json.readTree(raw);}
     String safeId(String id){if(id==null||!id.matches("[A-Za-z0-9_]{1,100}"))throw StoreController.bad("Invalid payment reference.");return id;}
     JsonNode request(String method,String path,Object body){
