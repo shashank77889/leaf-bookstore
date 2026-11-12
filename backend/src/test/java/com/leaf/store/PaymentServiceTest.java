@@ -19,6 +19,7 @@ import tools.jackson.databind.JsonNode;
 class PaymentServiceTest {
     @Autowired PaymentService payments;
     @Autowired JdbcTemplate db;
+    @Autowired StoreController store;
     @MockitoBean RazorpayClient gateway;
     Authentication user=new UsernamePasswordAuthenticationToken("paytest@example.test",null,List.of());
     ObjectMapper json=new ObjectMapper();
@@ -43,6 +44,38 @@ class PaymentServiceTest {
     @Test void createsServerPricedOrderAndReservesStock(){var c=create();assertEquals(50800,c.get("amount"));assertEquals(17,stock());assertEquals("PENDING_PAYMENT",stored((String)c.get("id")).get("STATUS"));assertFalse(c.containsKey("keySecret"));}
     @Test void repeatedCreateUsesOneProviderOrderAndReservation(){var a=create();var b=create();assertEquals(a.get("id"),b.get("id"));assertEquals(17,stock());verify(gateway,times(1)).createOrder(anyInt(),anyString());}
     @Test void providerFailureRollsBackReservation(){when(gateway.createOrder(anyInt(),anyString())).thenThrow(new IllegalStateException("fixture outage"));assertThrows(IllegalStateException.class,this::create);assertEquals(18,stock());assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM shop_orders",Integer.class));}
+    @Test void noTransactionIsOpenWhileCallingProvider(){
+        var open=new boolean[]{true};
+        when(gateway.createOrder(eq(50800),anyString())).thenAnswer(i->{
+            open[0]=org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive();
+            return node("{\"id\":\"order_fixture\",\"amount\":50800,\"currency\":\"INR\"}");
+        });
+        create();
+        assertFalse(open[0]);
+    }
+    @Test void unexpectedProviderResponseReleasesReservation(){
+        when(gateway.createOrder(anyInt(),anyString())).thenReturn(node("{\"id\":\"order_fixture\",\"amount\":1,\"currency\":\"INR\"}"));
+        assertThrows(ResponseStatusException.class,this::create);
+        assertEquals(18,stock());
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM shop_orders",Integer.class));
+    }
+    @Test void retryFinishesCheckoutLeftWithoutProviderOrder(){
+        String id=(String)store.reserve(checkout(),user).get("ID");
+        var c=create();
+        assertEquals(id,c.get("id"));
+        assertEquals("order_fixture",stored(id).get("PROVIDER_ORDER_ID"));
+        assertEquals(17,stock());
+    }
+    @Test void abandonedCheckoutWithoutProviderOrderExpiresWithoutCallingProvider(){
+        String id=(String)store.reserve(checkout(),user).get("ID");
+        assertEquals(17,stock());
+        assertThrows(ResponseStatusException.class,()->payments.reconcile(id,user));
+        expire(id);
+        assertEquals("EXPIRED",payments.reconcile(id,user).get("STATUS"));
+        payments.reconcile(id,null);
+        assertEquals(18,stock());
+        verify(gateway,never()).payments(anyString());
+    }
     @Test void signatureMustBeValid(){var c=create();when(gateway.checkoutSignature(anyString(),anyString(),anyString())).thenReturn(false);assertThrows(ResponseStatusException.class,()->payments.verify(new PaymentController.Verification((String)c.get("id"),"order_fixture","pay_fixture","0".repeat(64)),user));assertEquals("PENDING_PAYMENT",stored((String)c.get("id")).get("STATUS"));verify(gateway,never()).payment(anyString());}
     @Test void callbackUsesStoredProviderOrderId(){var c=create();assertThrows(ResponseStatusException.class,()->payments.verify(new PaymentController.Verification((String)c.get("id"),"order_unrelated","pay_fixture","0".repeat(64)),user));verify(gateway,never()).checkoutSignature(anyString(),anyString(),anyString());}
     @Test void capturedPaymentConfirmsExactlyOnce(){var c=create();payList(payment("captured",50800,"INR","order_fixture"));var a=payments.reconcile((String)c.get("id"),user);var b=payments.reconcile((String)c.get("id"),user);assertEquals("CONFIRMED",a.get("STATUS"));assertEquals("RAZORPAY_TEST_PAID",b.get("PAYMENT"));assertEquals(17,stock());}

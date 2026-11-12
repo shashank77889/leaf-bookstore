@@ -14,7 +14,7 @@ public class PaymentReconciler {
     @Scheduled(fixedDelayString="${store.razorpay.poll-ms:60000}",initialDelayString="${store.razorpay.poll-ms:60000}")
     public void refresh(){
         if(!gateway.configured())return;
-        var rows=db.queryForList("SELECT id FROM shop_orders WHERE status IN ('PENDING_PAYMENT','EXPIRED') AND provider_order_id IS NOT NULL ORDER BY CASE WHEN status='PENDING_PAYMENT' THEN 0 ELSE 1 END, created_at DESC LIMIT 100");
+        var rows=db.queryForList("SELECT id FROM shop_orders WHERE status IN ('PENDING_PAYMENT','EXPIRED') AND (provider_order_id IS NOT NULL OR (status='PENDING_PAYMENT' AND reserved_until<CURRENT_TIMESTAMP)) ORDER BY CASE WHEN status='PENDING_PAYMENT' THEN 0 ELSE 1 END, created_at DESC LIMIT 100");
         for(var row:rows)try{payments.reconcile((String)row.get("ID"),null);}catch(Exception ex){log.warn("Payment reconciliation deferred for order {}",row.get("ID"));}
     }
 }
