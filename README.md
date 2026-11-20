@@ -1,21 +1,49 @@
-# Leaf bookstore
+# Leaf Bookstore
 
-A working local e-commerce portfolio project built with **React 19, Java 21, Spring Boot 4.1, Spring Security, JDBC, and a persistent H2 database**.
+An online bookstore with a customer storefront and a store-manager admin panel. Customers browse books, fill a bag, check out and track orders; the admin manages the catalogue, stock and order status.
+
+Built with **Java 21 · Spring Boot 4.1 · Spring Security · JDBC · H2 · React 19 · Vite**, with Razorpay test-mode payments.
+
+![Leaf Bookstore storefront](docs/screenshots/storefront.png)
+
+| Book details | Shopping bag | Store manager |
+|---|---|---|
+| ![Book details](docs/screenshots/book-details.png) | ![Shopping bag](docs/screenshots/bag.png) | ![Admin panel](docs/screenshots/admin.png) |
+
+## Highlights
+
+- **Secure accounts** – Spring Security session login, BCrypt password hashing, HTTP-only cookies, CSRF protection and session rotation on login.
+- **Safe checkout** – prices calculated on the server, atomic and idempotent checkout, and row locks so two customers can't buy the last copy.
+- **Role-protected admin** – create and edit books, change stock, hide or show products, and move orders from confirmed to shipped to delivered.
+- **Payments** – a simulated checkout that works without keys, plus Razorpay test-mode integration with signature verification and webhooks.
+- **Tested** – 31 JUnit tests for the payment logic and an integration script that checks auth, CSRF, roles, totals, stock limits and concurrent checkout.
 
 ## Start
 
 Requirements: Java 21+, Maven 3.9+, Node.js 22+, npm.
 
-From this project directory in PowerShell:
+**Windows (PowerShell):**
 
 ```powershell
 .\build.ps1
 .\start.ps1
 ```
 
-Open **http://127.0.0.1:8080**. The packaged Spring Boot app serves both the React website and the API, so only one server is required. Stop it with Ctrl+C. If PowerShell blocks local scripts, run `powershell -ExecutionPolicy Bypass -File .\start.ps1` for this invocation.
+If PowerShell blocks local scripts, run `powershell -ExecutionPolicy Bypass -File .\start.ps1`.
 
-The app is bound to the local computer by default. It has not been published to the internet.
+**macOS / Linux:**
+
+```bash
+cd frontend && npm ci && npm run build && cd ..
+mkdir -p backend/src/main/resources/static
+cp -r frontend/dist/* backend/src/main/resources/static/
+cd backend && mvn -B package
+java -jar target/leaf-store-1.0.0.jar
+```
+
+Open **http://127.0.0.1:8080**. The packaged Spring Boot app serves both the React website and the API, so only one server is required. Stop it with Ctrl+C.
+
+The app is bound to the local computer by default and is not published to the internet.
 
 ## Try it
 
@@ -117,3 +145,6 @@ For a production release, also add account recovery, email verification, login r
 
 The `Leaf Bookstore` directory contains `Leaf Bookstore.cmd`, `Leaf Bookstore.jar`, and `START HERE.txt`. Double-click the `.cmd` launcher, wait for startup, and visit http://127.0.0.1:8080. This package only requires Java 21 or newer. It stores data in its own `Leaf Bookstore/data` directory, separate from the source development database. Run only one server on port 8080 at a time.
 
+## Author
+
+**Shashank CS** – [Portfolio](https://shashank77889.github.io) · [LinkedIn](https://www.linkedin.com/in/shashank--cs) · [GitHub](https://github.com/shashank77889)
